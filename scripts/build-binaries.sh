@@ -56,7 +56,8 @@ if [[ -n "$PLATFORM" ]]; then
 fi
 
 echo "==> Installing dependencies..."
-npm ci
+# Use npm install with workspace support
+npm install --legacy-peer-deps
 
 if [[ "$SKIP_DEPS" == "false" ]]; then
     echo "==> Installing cross-platform native bindings..."
@@ -83,8 +84,30 @@ else
     echo "==> Skipping cross-platform native bindings (--skip-deps)"
 fi
 
-echo "==> Building all packages..."
-npm run build
+echo "==> Building packages in dependency order..."
+# Build packages in order: tui -> ai -> agent -> coding-agent
+# This ensures dependencies are available for dependent packages
+
+echo "  Building @hyperspaceng/neural-tui..."
+cd packages/tui && npm run build && cd ../..
+
+echo "  Building @hyperspaceng/neural-ai..."
+cd packages/ai && npm run build && cd ../..
+
+echo "  Building @hyperspaceng/neural-agent-core..."
+cd packages/agent && npm run build && cd ../..
+
+echo "  Building @hyperspaceng/neural-coding-agent..."
+cd packages/coding-agent && npm run build && cd ../..
+
+echo "  Building @hyperspaceng/neural-web-ui..."
+cd packages/web-ui && npm run build && cd ../..
+
+echo "  Building @hyperspaceng/neural-pods..."
+cd packages/pods && npm run build && cd ../..
+
+echo "  Building @hyperspaceng/neural-mom..."
+cd packages/mom && npm run build && cd ../..
 
 echo "==> Building binaries..."
 cd packages/coding-agent
