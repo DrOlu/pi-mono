@@ -42,7 +42,14 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Configure npm authentication
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          echo "@hyperspaceng:registry=https://registry.npmjs.org/" >> ~/.npmrc
+
       - name: Build binaries
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: ./scripts/build-binaries.sh
 
       - name: Extract changelog for this version
