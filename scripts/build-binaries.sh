@@ -85,29 +85,20 @@ else
 fi
 
 echo "==> Building packages in dependency order..."
-# Build packages in order: tui -> ai -> agent -> coding-agent
-# This ensures dependencies are available for dependent packages
+# Build only the packages needed for the coding-agent binary
+# Uses subshells to avoid cd directory issues if a build fails
 
-echo "  Building @hyperspaceng/neural-tui..."
-cd packages/tui && npm run build && cd ../..
+echo "  Building tui..."
+(cd packages/tui && npm run build)
 
-echo "  Building @hyperspaceng/neural-ai..."
-cd packages/ai && npm run build && cd ../..
+echo "  Building ai..."
+(cd packages/ai && npm run build)
 
-echo "  Building @hyperspaceng/neural-agent-core..."
-cd packages/agent && npm run build && cd ../..
+echo "  Building agent..."
+(cd packages/agent && npm run build)
 
-echo "  Building @hyperspaceng/neural-coding-agent..."
-cd packages/coding-agent && npm run build && cd ../..
-
-echo "  Building @hyperspaceng/neural-web-ui..."
-cd packages/web-ui && npm run build && cd ../..
-
-echo "  Building @hyperspaceng/neural-pods..."
-cd packages/pods && npm run build && cd ../..
-
-echo "  Building @hyperspaceng/neural-mom..."
-cd packages/mom && npm run build && cd ../..
+echo "  Building coding-agent..."
+(cd packages/coding-agent && npm run build)
 
 echo "==> Building binaries..."
 cd packages/coding-agent
