@@ -18,6 +18,9 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    outputs:
+      synced: ${{ steps.sync.outputs.synced }}
+      new_version: ${{ steps.version.outputs.new_version }}
     steps:
       - name: Checkout fork
         uses: actions/checkout@v4
@@ -36,6 +39,7 @@ jobs:
           git fetch upstream
 
       - name: Sync with upstream
+        id: sync
         run: |
           BRANCH="${{ github.event.inputs.branch || 'main' }}"
           git checkout $BRANCH
@@ -45,10 +49,12 @@ jobs:
           
           if [ "$UPSTREAM_COMMITS" -eq 0 ]; then
             echo "No new commits from upstream. Already up to date."
+            echo "synced=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
           echo "Found $UPSTREAM_COMMITS new commits from upstream."
+          echo "synced=true" >> $GITHUB_OUTPUT
           
           # Create a sync branch
           SYNC_BRANCH="sync/upstream-$(date +%Y%m%d-%H%M%S)"
@@ -80,12 +86,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Auto-merge if no conflicts
+        if: steps.sync.outputs.synced == 'true'
         run: |
           BRANCH="${{ github.event.inputs.branch || 'main' }}"
           
           # Check if merge was successful without conflicts
           if git merge-tree $(git merge-base HEAD upstream/$BRANCH) HEAD upstream/$BRANCH | grep -q "changed in both"; then
             echo "Conflicts detected. PR created for manual resolution."
+            echo "synced=false" >> $GITHUB_OUTPUT
           else
             echo "No conflicts. Merging to $BRANCH..."
             git checkout $BRANCH
@@ -93,3 +101,32 @@ jobs:
             git push origin $BRANCH
             echo "Successfully synced with upstream!"
           fi
+
+      - name: Generate new version tag
+        id: version
+        if: steps.sync.outputs.synced == 'true'
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+          
+          # Parse version components
+          VERSION=${LATEST_TAG#v}
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          
+          echo "New version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+  build-and-release:
+    needs: sync
+    if: needs.sync.outputs.synced == 'true'
+    uses: ./.github/workflows/build-binaries.yml
+    with:
+      tag: ${{ needs.sync.outputs.new_version }}
+    secrets: inherit
