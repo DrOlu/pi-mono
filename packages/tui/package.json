@@ -1,5 +1,5 @@
 {
-	"name": "@hyperspace/neural-tui",
+	"name": "@hyperspaceng/neural-tui",
 	"version": "0.60.0",
 	"description": "Terminal User Interface library with differential rendering for efficient text-based applications",
 	"type": "module",

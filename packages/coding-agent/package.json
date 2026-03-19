@@ -1,5 +1,5 @@
 {
-	"name": "@hyperspace/neural-coding-agent",
+	"name": "@hyperspaceng/neural-coding-agent",
 	"version": "0.60.0",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
@@ -40,9 +40,9 @@
 	},
 	"dependencies": {
 		"@mariozechner/jiti": "^2.6.2",
-		"@hyperspace/neural-agent-core": "^0.60.0",
-		"@hyperspace/neural-ai": "^0.60.0",
-		"@hyperspace/neural-tui": "^0.60.0",
+		"@hyperspaceng/neural-agent-core": "^0.60.0",
+		"@hyperspaceng/neural-ai": "^0.60.0",
+		"@hyperspaceng/neural-tui": "^0.60.0",
 		"@silvia-odwyer/photon-node": "^0.3.4",
 		"chalk": "^5.5.0",
 		"cli-highlight": "^2.1.11",
@@ -66,7 +66,7 @@
 		}
 	},
 	"optionalDependencies": {
-		"@hyperspace/neural-clipboard": "^0.3.2"
+		"@hyperspaceng/neural-clipboard": "^0.3.2"
 	},
 	"devDependencies": {
 		"@types/diff": "^7.0.2",

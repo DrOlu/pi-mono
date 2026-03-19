@@ -1,5 +1,5 @@
 {
-	"name": "@hyperspace/neural-agent-core",
+	"name": "@hyperspaceng/neural-agent-core",
 	"version": "0.60.0",
 	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
 	"type": "module",
@@ -17,7 +17,7 @@
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {
-		"@hyperspace/neural-ai": "^0.60.0"
+		"@hyperspaceng/neural-ai": "^0.60.0"
 	},
 	"keywords": [
 		"ai",

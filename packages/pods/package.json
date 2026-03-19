@@ -1,5 +1,5 @@
 {
-	"name": "@hyperspace/neural-pods",
+	"name": "@hyperspaceng/neural-pods",
 	"version": "0.60.0",
 	"description": "CLI tool for managing vLLM deployments on GPU pods",
 	"type": "module",
@@ -33,7 +33,7 @@
 		"node": ">=20.0.0"
 	},
 	"dependencies": {
-		"@hyperspace/neural-agent-core": "^0.60.0",
+		"@hyperspaceng/neural-agent-core": "^0.60.0",
 		"chalk": "^5.5.0"
 	},
 	"devDependencies": {}
