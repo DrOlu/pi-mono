@@ -55,41 +55,6 @@ if [[ -n "$PLATFORM" ]]; then
     esac
 fi
 
-echo "==> Converting to local file references for build..."
-# Temporarily convert package.json to use file: references for local building
-# This avoids npm trying to fetch from registry during install
-node -e "
-const fs = require('fs');
-const path = require('path');
-
-const packagesDir = 'packages';
-const localPaths = {
-  '@hyperspaceng/neural-tui': 'file:../tui',
-  '@hyperspaceng/neural-ai': 'file:../ai',
-  '@hyperspaceng/neural-agent-core': 'file:../agent',
-  '@hyperspaceng/neural-coding-agent': 'file:../coding-agent',
-  '@hyperspaceng/neural-web-ui': 'file:../web-ui',
-  '@hyperspaceng/neural-pods': 'file:../pods',
-  '@hyperspaceng/neural-mom': 'file:../mom'
-};
-
-['ai', 'agent', 'coding-agent', 'web-ui', 'mom', 'pods'].forEach(pkg => {
-  const pkgPath = path.join(packagesDir, pkg, 'package.json');
-  const data = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  
-  if (data.dependencies) {
-    Object.keys(data.dependencies).forEach(dep => {
-      if (localPaths[dep]) {
-        data.dependencies[dep] = localPaths[dep];
-      }
-    });
-  }
-  
-  fs.writeFileSync(pkgPath, JSON.stringify(data, null, '\t'));
-  console.log('Converted', pkg, 'to file: references');
-});
-"
-
 echo "==> Installing dependencies..."
 # Use npm install with workspace support
 npm install --legacy-peer-deps

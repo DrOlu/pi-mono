@@ -17,7 +17,7 @@
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {
-		"@hyperspaceng/neural-ai": "^0.60.0"
+		"@mariozechner/pi-ai": "^0.60.0"
 	},
 	"keywords": [
 		"ai",
