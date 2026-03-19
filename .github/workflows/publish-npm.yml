@@ -1,0 +1,105 @@
+name: Publish to NPM
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+  workflow_call:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump versions
+        run: |
+          BUMP_TYPE="${{ inputs.version_bump || 'patch' }}"
+          echo "Bumping versions ($BUMP_TYPE)..."
+          npm version $BUMP_TYPE -ws --no-git-tag-version
+          
+          # Sync versions across packages
+          node scripts/sync-versions.js
+          
+          # Show new versions
+          echo "New package versions:"
+          cat packages/*/package.json | grep '"version"' | head -10
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: |
+          echo "Building packages in dependency order..."
+          cd packages/tui && npm run build
+          cd ../ai && npm run build
+          cd ../agent && npm run build
+          cd ../coding-agent && npm run build
+          cd ../mom && npm run build
+          cd ../web-ui && npm run build
+          cd ../pods && npm run build
+
+      - name: Publish to NPM
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "Publishing packages to NPM..."
+          
+          # Publish in dependency order
+          cd packages/tui && npm publish --access public && cd ../..
+          cd packages/ai && npm publish --access public && cd ../..
+          cd packages/agent && npm publish --access public && cd ../..
+          cd packages/coding-agent && npm publish --access public && cd ../..
+          cd packages/web-ui && npm publish --access public && cd ../..
+          cd packages/pods && npm publish --access public && cd ../..
+          cd packages/mom && npm publish --access public && cd ../..
+          
+          echo "All packages published!"
+
+      - name: Commit version bumps
+        run: |
+          git add -A
+          git commit -m "Bump versions for NPM release [skip ci]" || echo "No changes to commit"
+          git push origin main || echo "Nothing to push"
+
+      - name: Create Git tag
+        run: |
+          # Get version from coding-agent package
+          VERSION=$(cat packages/coding-agent/package.json | grep '"version"' | head -1 | cut -d'"' -f4)
+          TAG="v${VERSION}"
+          echo "Creating tag: $TAG"
+          git tag $TAG
+          git push origin $TAG
+        continue-on-error: true

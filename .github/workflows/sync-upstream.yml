@@ -130,3 +130,11 @@ jobs:
     with:
       tag: ${{ needs.sync.outputs.new_version }}
     secrets: inherit
+
+  publish-npm:
+    needs: sync
+    if: needs.sync.outputs.synced == 'true'
+    uses: ./.github/workflows/publish-npm.yml
+    with:
+      version_bump: 'patch'
+    secrets: inherit
