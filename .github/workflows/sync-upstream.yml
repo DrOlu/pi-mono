@@ -1,0 +1,95 @@
+name: Sync with Upstream
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to sync (default: main)'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/badlogic/pi-mono.git
+          git fetch upstream
+
+      - name: Sync with upstream
+        run: |
+          BRANCH="${{ github.event.inputs.branch || 'main' }}"
+          git checkout $BRANCH
+          
+          # Check if there are new commits from upstream
+          UPSTREAM_COMMITS=$(git rev-list --count HEAD..upstream/$BRANCH)
+          
+          if [ "$UPSTREAM_COMMITS" -eq 0 ]; then
+            echo "No new commits from upstream. Already up to date."
+            exit 0
+          fi
+          
+          echo "Found $UPSTREAM_COMMITS new commits from upstream."
+          
+          # Create a sync branch
+          SYNC_BRANCH="sync/upstream-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b $SYNC_BRANCH
+          
+          # Merge upstream changes
+          git merge upstream/$BRANCH --no-edit || {
+            echo "Merge conflicts detected. Creating PR for manual resolution."
+            git add -A
+            git commit -m "WIP: Sync with upstream (conflicts need resolution)"
+          }
+          
+          # Push the sync branch
+          git push origin $SYNC_BRANCH
+          
+          # Create a pull request
+          gh pr create \
+            --title "Sync with upstream: $UPSTREAM_COMMITS new commits" \
+            --body "This PR syncs the fork with upstream changes from badlogic/pi-mono.
+          
+          - **Commits to sync:** $UPSTREAM_COMMITS
+          - **Upstream branch:** $BRANCH
+          - **Sync date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          
+          Please review and merge if there are no conflicts." \
+            --base $BRANCH \
+            --head $SYNC_BRANCH || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge if no conflicts
+        run: |
+          BRANCH="${{ github.event.inputs.branch || 'main' }}"
+          
+          # Check if merge was successful without conflicts
+          if git merge-tree $(git merge-base HEAD upstream/$BRANCH) HEAD upstream/$BRANCH | grep -q "changed in both"; then
+            echo "Conflicts detected. PR created for manual resolution."
+          else
+            echo "No conflicts. Merging to $BRANCH..."
+            git checkout $BRANCH
+            git merge upstream/$BRANCH --no-edit
+            git push origin $BRANCH
+            echo "Successfully synced with upstream!"
+          fi

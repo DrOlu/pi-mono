@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build pi binaries for all platforms locally.
+# Build neural binaries for all platforms locally.
 # Mirrors .github/workflows/build-binaries.yml
 #
 # Usage:
@@ -12,11 +12,11 @@
 #
 # Output:
 #   packages/coding-agent/binaries/
-#     pi-darwin-arm64.tar.gz
-#     pi-darwin-x64.tar.gz
-#     pi-linux-x64.tar.gz
-#     pi-linux-arm64.tar.gz
-#     pi-windows-x64.zip
+#     neural-darwin-arm64.tar.gz
+#     neural-darwin-x64.tar.gz
+#     neural-linux-x64.tar.gz
+#     neural-linux-arm64.tar.gz
+#     neural-windows-x64.zip
 
 set -euo pipefail
 
@@ -107,9 +107,9 @@ for platform in "${PLATFORMS[@]}"; do
     # call site has a try/catch fallback. For Windows builds, we copy the
     # appropriate .node file alongside the binary below.
     if [[ "$platform" == "windows-x64" ]]; then
-        bun build --compile --external koffi --target=bun-$platform ./dist/bun/cli.js --outfile binaries/$platform/pi.exe
+        bun build --compile --external koffi --target=bun-$platform ./dist/bun/cli.js --outfile binaries/$platform/neural.exe
     else
-        bun build --compile --external koffi --target=bun-$platform ./dist/bun/cli.js --outfile binaries/$platform/pi
+        bun build --compile --external koffi --target=bun-$platform ./dist/bun/cli.js --outfile binaries/$platform/neural
     fi
 done
 
@@ -142,12 +142,12 @@ cd binaries
 for platform in "${PLATFORMS[@]}"; do
     if [[ "$platform" == "windows-x64" ]]; then
         # Windows (zip)
-        echo "Creating pi-$platform.zip..."
-        (cd $platform && zip -r ../pi-$platform.zip .)
+        echo "Creating neural-$platform.zip..."
+        (cd $platform && zip -r ../neural-$platform.zip .)
     else
         # Unix platforms (tar.gz) - use wrapper directory for mise compatibility
-        echo "Creating pi-$platform.tar.gz..."
-        mv $platform pi && tar -czf pi-$platform.tar.gz pi && mv pi $platform
+        echo "Creating neural-$platform.tar.gz..."
+        mv $platform neural && tar -czf neural-$platform.tar.gz neural && mv neural $platform
     fi
 done
 
@@ -156,9 +156,9 @@ echo "==> Extracting archives for testing..."
 for platform in "${PLATFORMS[@]}"; do
     rm -rf $platform
     if [[ "$platform" == "windows-x64" ]]; then
-        mkdir -p $platform && (cd $platform && unzip -q ../pi-$platform.zip)
+        mkdir -p $platform && (cd $platform && unzip -q ../neural-$platform.zip)
     else
-        tar -xzf pi-$platform.tar.gz && mv pi $platform
+        tar -xzf neural-$platform.tar.gz && mv neural $platform
     fi
 done
 
@@ -169,5 +169,5 @@ ls -lh *.tar.gz *.zip 2>/dev/null || true
 echo ""
 echo "Extracted directories for testing:"
 for platform in "${PLATFORMS[@]}"; do
-    echo "  binaries/$platform/pi"
+    echo "  binaries/$platform/neural"
 done

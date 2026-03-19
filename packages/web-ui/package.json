@@ -46,6 +46,6 @@
 		"web-components",
 		"mini-lit"
 	],
-	"author": "Mario Zechner",
+	"author": "Hyperspace Technologies <hyperspace@hyperspace.ng>",
 	"license": "MIT"
 }

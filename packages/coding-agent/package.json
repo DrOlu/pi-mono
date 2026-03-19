@@ -4,11 +4,11 @@
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
 	"piConfig": {
-		"name": "pi",
+		"name": "neural",
 		"configDir": ".pi"
 	},
 	"bin": {
-		"pi": "dist/cli.js"
+		"neural": "dist/cli.js"
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -86,11 +86,11 @@
 		"tui",
 		"agent"
 	],
-	"author": "Mario Zechner",
+	"author": "Hyperspace Technologies <hyperspace@hyperspace.ng>",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/badlogic/pi-mono.git",
+		"url": "git+https://github.com/DrOlu/pi-mono.git",
 		"directory": "packages/coding-agent"
 	},
 	"engines": {
