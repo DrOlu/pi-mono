@@ -69,9 +69,9 @@ jobs:
 
       - name: Rename packages for @hyperspaceng scope and publish
         run: |
-          # Configure npm auth directly — bypass any setup-node overrides
-          unset NPM_CONFIG_USERCONFIG
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > "$HOME/.npmrc"
+          # Configure npm auth — write to project .npmrc and global userconfig
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
+          export NPM_CONFIG_USERCONFIG="$(pwd)/.npmrc"
           npm whoami && echo "✅ Authenticated" || { echo "❌ Auth failed"; exit 1; }
 
           echo "Publishing packages to NPM under @hyperspaceng scope..."
