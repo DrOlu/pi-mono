@@ -28,6 +28,11 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
@@ -43,85 +48,106 @@ jobs:
         run: |
           BRANCH="${{ github.event.inputs.branch || 'main' }}"
           git checkout $BRANCH
-          
-          # Check if there are new commits from upstream
+
           UPSTREAM_COMMITS=$(git rev-list --count HEAD..upstream/$BRANCH)
-          
+
           if [ "$UPSTREAM_COMMITS" -eq 0 ]; then
             echo "No new commits from upstream. Already up to date."
             echo "synced=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           echo "Found $UPSTREAM_COMMITS new commits from upstream."
-          echo "synced=true" >> $GITHUB_OUTPUT
-          
-          # Create a sync branch
-          SYNC_BRANCH="sync/upstream-$(date +%Y%m%d-%H%M%S)"
-          git checkout -b $SYNC_BRANCH
-          
-          # Merge upstream changes
-          git merge upstream/$BRANCH --no-edit || {
-            echo "Merge conflicts detected. Creating PR for manual resolution."
-            git add -A
-            git commit -m "WIP: Sync with upstream (conflicts need resolution)"
-          }
-          
-          # Push the sync branch
-          git push origin $SYNC_BRANCH
-          
-          # Create a pull request
-          gh pr create \
-            --title "Sync with upstream: $UPSTREAM_COMMITS new commits" \
-            --body "This PR syncs the fork with upstream changes from badlogic/pi-mono.
-          
-          - **Commits to sync:** $UPSTREAM_COMMITS
-          - **Upstream branch:** $BRANCH
-          - **Sync date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          
-          Please review and merge if there are no conflicts." \
-            --base $BRANCH \
-            --head $SYNC_BRANCH || true
+
+          # Attempt merge
+          if git merge upstream/$BRANCH --no-edit; then
+            echo "Clean merge — no conflicts."
+            echo "synced=true" >> $GITHUB_OUTPUT
+            git push origin $BRANCH
+          else
+            echo "Merge conflicts detected. Auto-resolving..."
+
+            # For each conflicted package.json: take upstream, re-apply branding
+            node -e "
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+
+            const conflicted = execSync('git diff --name-only --diff-filter=U')
+              .toString().trim().split('\n').filter(Boolean);
+
+            console.log('Conflicted files:', conflicted);
+
+            for (const f of conflicted) {
+              if (f === 'package-lock.json') {
+                execSync('git checkout --theirs ' + f);
+                execSync('git add ' + f);
+                console.log('  ' + f + ': took upstream (will regenerate)');
+                continue;
+              }
+
+              if (!f.endsWith('package.json')) {
+                execSync('git checkout --theirs ' + f);
+                execSync('git add ' + f);
+                console.log('  ' + f + ': took upstream');
+                continue;
+              }
+
+              // Take upstream version
+              execSync('git checkout --theirs ' + f);
+
+              // Apply branding
+              const data = JSON.parse(fs.readFileSync(f, 'utf8'));
+              if (data.author) data.author = 'Hyperspace Technologies <hyperspace@hyperspace.ng>';
+              if (f.includes('coding-agent') && data.piConfig) {
+                data.piConfig.name = 'neural';
+              }
+              if (f.includes('coding-agent') && data.bin && data.bin.pi) {
+                data.bin.neural = data.bin.pi;
+                delete data.bin.pi;
+              }
+              if (f.includes('/ai/') && data.bin && data.bin['pi-ai']) {
+                data.bin['neural-ai'] = data.bin['pi-ai'];
+                delete data.bin['pi-ai'];
+              }
+              fs.writeFileSync(f, JSON.stringify(data, null, '\t'));
+              execSync('git add ' + f);
+              console.log('  ' + f + ': resolved (upstream + branding)');
+            }
+            "
+
+            # Regenerate package-lock.json
+            echo "Regenerating package-lock.json..."
+            npm install --legacy-peer-deps 2>/dev/null || true
+            git add package-lock.json
+
+            git commit --no-edit -m "Merge upstream with auto-resolved branding conflicts"
+            git push origin $BRANCH
+            echo "synced=true" >> $GITHUB_OUTPUT
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Auto-merge if no conflicts
-        if: steps.sync.outputs.synced == 'true'
-        run: |
-          BRANCH="${{ github.event.inputs.branch || 'main' }}"
-          
-          # Check if merge was successful without conflicts
-          if git merge-tree $(git merge-base HEAD upstream/$BRANCH) HEAD upstream/$BRANCH | grep -q "changed in both"; then
-            echo "Conflicts detected. PR created for manual resolution."
-            echo "synced=false" >> $GITHUB_OUTPUT
-          else
-            echo "No conflicts. Merging to $BRANCH..."
-            git checkout $BRANCH
-            git merge upstream/$BRANCH --no-edit
-            git push origin $BRANCH
-            echo "Successfully synced with upstream!"
-          fi
 
       - name: Generate new version tag
         id: version
         if: steps.sync.outputs.synced == 'true'
         run: |
-          # Get the latest tag
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "Latest tag: $LATEST_TAG"
-          
-          # Parse version components
+
           VERSION=${LATEST_TAG#v}
           MAJOR=$(echo $VERSION | cut -d. -f1)
           MINOR=$(echo $VERSION | cut -d. -f2)
           PATCH=$(echo $VERSION | cut -d. -f3)
-          
-          # Increment patch version
+
           NEW_PATCH=$((PATCH + 1))
           NEW_VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
-          
+
           echo "New version: $NEW_VERSION"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+          # Create tag
+          git tag $NEW_VERSION
+          git push origin $NEW_VERSION
 
   build-and-release:
     needs: sync
