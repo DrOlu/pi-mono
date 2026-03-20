@@ -120,12 +120,13 @@ jobs:
             npm install --legacy-peer-deps 2>/dev/null || true
             git add package-lock.json
 
-            git commit --no-edit -m "Merge upstream with auto-resolved branding conflicts"
+            HUSKY=0 git commit --no-verify --no-edit -m "Merge upstream with auto-resolved branding conflicts"
             git push origin $BRANCH
             echo "synced=true" >> $GITHUB_OUTPUT
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HUSKY: '0'
 
       - name: Generate new version tag
         id: version
