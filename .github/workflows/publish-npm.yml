@@ -71,9 +71,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # Configure npm auth — write token via env var to project .npmrc
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
-          export NPM_CONFIG_USERCONFIG="$(pwd)/.npmrc"
+          # Configure npm auth using npm config set (bypasses all .npmrc path issues)
+          npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}" --location=user
+          npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}" --location=global 2>/dev/null || true
           npm whoami && echo "✅ Authenticated" || { echo "❌ Auth failed"; exit 1; }
 
           echo "Publishing packages to NPM under @hyperspaceng scope..."
