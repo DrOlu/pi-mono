@@ -37,7 +37,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Configure Git
         run: |
@@ -68,17 +67,13 @@ jobs:
           (cd packages/agent && npm run build)
           (cd packages/coding-agent && npm run build)
 
-      - name: Configure npm authentication
-        run: |
-          # Unset the setup-node override so npm uses ~/.npmrc
-          unset NPM_CONFIG_USERCONFIG
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          npm whoami || echo "Auth check failed"
-
       - name: Rename packages for @hyperspaceng scope and publish
-        env:
-          NPM_CONFIG_USERCONFIG: ''
         run: |
+          # Configure npm auth directly — bypass any setup-node overrides
+          unset NPM_CONFIG_USERCONFIG
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > "$HOME/.npmrc"
+          npm whoami && echo "✅ Authenticated" || { echo "❌ Auth failed"; exit 1; }
+
           echo "Publishing packages to NPM under @hyperspaceng scope..."
 
           # Map of directories to @hyperspaceng package names
