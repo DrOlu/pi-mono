@@ -70,16 +70,14 @@ jobs:
 
       - name: Configure npm authentication
         run: |
-          # Write to the path that actions/setup-node uses
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > $NPM_CONFIG_USERCONFIG
-          echo "@hyperspaceng:registry=https://registry.npmjs.org/" >> $NPM_CONFIG_USERCONFIG
-          # Also write to ~/.npmrc as fallback
+          # Unset the setup-node override so npm uses ~/.npmrc
+          unset NPM_CONFIG_USERCONFIG
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           npm whoami || echo "Auth check failed"
 
       - name: Rename packages for @hyperspaceng scope and publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ''
         run: |
           echo "Publishing packages to NPM under @hyperspaceng scope..."
 
