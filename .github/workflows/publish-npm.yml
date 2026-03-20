@@ -68,6 +68,12 @@ jobs:
           (cd packages/agent && npm run build)
           (cd packages/coding-agent && npm run build)
 
+      - name: Configure npm authentication
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          echo "@hyperspaceng:registry=https://registry.npmjs.org/" >> ~/.npmrc
+          npm whoami || echo "Auth check failed"
+
       - name: Rename packages for @hyperspaceng scope and publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
