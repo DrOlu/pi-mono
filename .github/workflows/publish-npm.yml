@@ -48,11 +48,7 @@ jobs:
           BUMP_TYPE="${{ inputs.version_bump || 'patch' }}"
           echo "Bumping versions ($BUMP_TYPE)..."
           npm version $BUMP_TYPE -ws --no-git-tag-version
-
-          # Sync versions across packages
           node scripts/sync-versions.js
-
-          # Show new versions
           echo "New package versions:"
           cat packages/*/package.json | grep '"version"' | head -20
 
@@ -67,10 +63,16 @@ jobs:
           (cd packages/agent && npm run build)
           (cd packages/coding-agent && npm run build)
 
-      - name: Generate publish helper scripts
+      - name: Auto-discover and publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # Script 1: Discover packages and generate mappings
-          cat > /tmp/discover.js << 'SCRIPT'
+          npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}" --location=user
+          npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}" --location=global 2>/dev/null || true
+          npm whoami && echo "✅ Authenticated" || { echo "❌ Auth failed"; exit 1; }
+
+          # Step 1: Discover packages and create mapping
+          node << 'DISCOVER_SCRIPT'
           const fs = require("fs");
           const path = require("path");
 
@@ -101,7 +103,7 @@ jobs:
             depMap[origName] = newName;
           }
 
-          // Topological sort for publish order
+          // Topological sort
           const graph = {};
           for (const dir of Object.keys(packageMap)) {
             const pkg = JSON.parse(fs.readFileSync(path.join("packages", dir, "package.json"), "utf8"));
@@ -116,7 +118,6 @@ jobs:
               }
             }
           }
-
           const visited = new Set(), order = [];
           function visit(n) { if (visited.has(n)) return; visited.add(n); (graph[n]||[]).forEach(visit); order.push(n); }
           Object.keys(packageMap).forEach(visit);
@@ -130,78 +131,8 @@ jobs:
           fs.writeFileSync("/tmp/package_map.json", JSON.stringify(packageMap));
           fs.writeFileSync("/tmp/dep_map.json", JSON.stringify(depMap));
           fs.writeFileSync("/tmp/publish_order.txt", order.join("\n"));
-          SCRIPT
+          DISCOVER_SCRIPT
 
-          # Script 2: Rewrite package.json for publishing
-          cat > /tmp/rewrite_pkg.js << 'SCRIPT'
-          const fs = require("fs");
-          const depMap = JSON.parse(fs.readFileSync("/tmp/dep_map.json", "utf8"));
-          const newName = process.argv[2];
-
-          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-          pkg.name = newName;
-
-          for (const dt of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
-            if (pkg[dt]) {
-              const nd = {};
-              for (const [n, v] of Object.entries(pkg[dt])) { nd[depMap[n] || n] = v; }
-              pkg[dt] = nd;
-            }
-          }
-          fs.writeFileSync("package.json", JSON.stringify(pkg, null, "\t"));
-          SCRIPT
-
-          # Script 3: Rewrite import paths in dist/src files (longest-match-first)
-          cat > /tmp/rewrite_imports.js << 'SCRIPT'
-          const fs = require("fs");
-          const path = require("path");
-          const depMap = JSON.parse(fs.readFileSync("/tmp/dep_map.json", "utf8"));
-
-          // Sort by length descending: "@mariozechner/pi-tui" before "@mariozechner/pi"
-          const sortedEntries = Object.entries(depMap).sort((a, b) => b[0].length - a[0].length);
-
-          function walk(dir) {
-            if (!fs.existsSync(dir)) return [];
-            const out = [];
-            for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-              const p = path.join(dir, e.name);
-              if (e.isDirectory()) out.push(...walk(p));
-              else if (/\.(js|mjs|cjs|ts|map)$/.test(e.name)) out.push(p);
-            }
-            return out;
-          }
-
-          let total = 0;
-          for (const d of ["dist", "src"]) {
-            for (const file of walk(d)) {
-              let content = fs.readFileSync(file, "utf8");
-              let changed = false;
-              for (const [orig, repl] of sortedEntries) {
-                if (content.includes(orig)) {
-                  content = content.replaceAll(orig, repl);
-                  changed = true;
-                  total++;
-                }
-              }
-              if (changed) fs.writeFileSync(file, content);
-            }
-          }
-          console.log("  Rewrote imports in " + total + " files");
-          SCRIPT
-
-          echo "✅ Helper scripts created"
-
-      - name: Auto-discover packages and publish under @hyperspaceng scope
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          # Configure npm auth
-          npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}" --location=user
-          npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}" --location=global 2>/dev/null || true
-          npm whoami && echo "✅ Authenticated" || { echo "❌ Auth failed"; exit 1; }
-
-          echo ""
-          node /tmp/discover.js
           echo ""
           echo "=== Publishing packages ==="
 
@@ -213,23 +144,68 @@ jobs:
 
             NEW_NAME=$(node -e "const m=JSON.parse(require('fs').readFileSync('/tmp/package_map.json','utf8'));console.log(m['$pkg_dir']?.newName||'')")
             ORIG_NAME=$(node -e "const m=JSON.parse(require('fs').readFileSync('/tmp/package_map.json','utf8'));console.log(m['$pkg_dir']?.origName||'')")
-            [ -z "$NEW_NAME" ] || [ -z "$ORIG_NAME" ] && continue
+            [ -z "$NEW_NAME" ] && continue
 
             echo ""
             echo "📦 Publishing $NEW_NAME (from $ORIG_NAME)..."
             cd "$PKG_DIR"
 
-            # Rewrite package.json (name + deps)
-            node /tmp/rewrite_pkg.js "$NEW_NAME"
+            # Rewrite package.json
+            node << REWRITE_PKG
+            const fs = require("fs");
+            const depMap = JSON.parse(fs.readFileSync("/tmp/dep_map.json", "utf8"));
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.name = "$NEW_NAME";
+            for (const dt of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+              if (pkg[dt]) {
+                const nd = {};
+                for (const [n, v] of Object.entries(pkg[dt])) { nd[depMap[n] || n] = v; }
+                pkg[dt] = nd;
+              }
+            }
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, "\t"));
+          REWRITE_PKG
 
-            # Rewrite import paths in compiled files (longest-match-first)
-            node /tmp/rewrite_imports.js
+            # Rewrite imports in dist/src using sed (most reliable, no JS edge cases)
+            # Process longest package names first to avoid partial matches
+            echo "  Rewriting imports with sed..."
+
+            # Build sed commands sorted by length (longest first)
+            node -e "
+            const depMap = JSON.parse(require('fs').readFileSync('/tmp/dep_map.json', 'utf8'));
+            const sorted = Object.entries(depMap).sort((a, b) => b[0].length - a[0].length);
+            const cmds = sorted.map(([orig, repl]) => 's|' + orig.replace(/\//g, '\\\\/') + '|' + repl.replace(/\//g, '\\\\/') + '|g');
+            require('fs').writeFileSync('/tmp/sed_commands.txt', cmds.join('\n'));
+            console.log('  Sed commands (' + cmds.length + '):');
+            cmds.forEach(c => console.log('    ' + c));
+            "
+
+            # Apply sed to all dist files
+            if [ -d "dist" ]; then
+              find dist -type f \( -name "*.js" -o -name "*.ts" -o -name "*.map" -o -name "*.mjs" -o -name "*.cjs" \) | while read f; do
+                sed -f /tmp/sed_commands.txt -i "$f"
+              done
+              echo "  Done rewriting dist files"
+            fi
+            if [ -d "src" ]; then
+              find src -type f \( -name "*.js" -o -name "*.ts" -o -name "*.map" -o -name "*.mjs" -o -name "*.cjs" \) | while read f; do
+                sed -f /tmp/sed_commands.txt -i "$f"
+              done
+              echo "  Done rewriting src files"
+            fi
+
+            # Debug: verify the rewrite worked for coding-agent
+            if [ "$pkg_dir" = "coding-agent" ]; then
+              echo "  DEBUG: checking config-selector.js after rewrite:"
+              grep "pi-tui\|neural-tui\|neural-pods-tui" dist/cli/config-selector.js 2>/dev/null || echo "    (no matches found)"
+            fi
 
             # Publish
             npm publish --access public --ignore-scripts 2>&1 || echo "⚠️ Failed to publish $NEW_NAME"
 
-            # Restore original files
-            git checkout -- . 2>/dev/null || true
+            # Restore package.json only (dist is gitignored, not affected by git checkout)
+            git checkout -- package.json 2>/dev/null || true
+
             cd - > /dev/null
           done
 
