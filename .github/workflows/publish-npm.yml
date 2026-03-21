@@ -67,6 +67,130 @@ jobs:
           (cd packages/agent && npm run build)
           (cd packages/coding-agent && npm run build)
 
+      - name: Generate publish helper scripts
+        run: |
+          # Script 1: Discover packages and generate mappings
+          cat > /tmp/discover.js << 'SCRIPT'
+          const fs = require("fs");
+          const path = require("path");
+
+          const packagesDir = "packages";
+          const dirs = fs.readdirSync(packagesDir).filter(d =>
+            fs.statSync(path.join(packagesDir, d)).isDirectory() &&
+            fs.existsSync(path.join(packagesDir, d, "package.json"))
+          );
+
+          const packageMap = {};
+          const depMap = {};
+
+          for (const dir of dirs) {
+            const pkg = JSON.parse(fs.readFileSync(path.join(packagesDir, dir, "package.json"), "utf8"));
+            const origName = pkg.name;
+            if (!origName || !origName.startsWith("@mariozechner/")) continue;
+
+            let newName;
+            if (origName === "@mariozechner/pi") {
+              newName = "@hyperspaceng/neural-pods";
+            } else if (origName.startsWith("@mariozechner/pi-")) {
+              newName = "@hyperspaceng/neural-" + origName.replace("@mariozechner/pi-", "");
+            } else {
+              newName = "@hyperspaceng/neural-" + origName.replace("@mariozechner/", "");
+            }
+
+            packageMap[dir] = { origName, newName };
+            depMap[origName] = newName;
+          }
+
+          // Topological sort for publish order
+          const graph = {};
+          for (const dir of Object.keys(packageMap)) {
+            const pkg = JSON.parse(fs.readFileSync(path.join("packages", dir, "package.json"), "utf8"));
+            graph[dir] = [];
+            for (const dt of ["dependencies", "devDependencies", "peerDependencies"]) {
+              if (pkg[dt]) {
+                for (const dep of Object.keys(pkg[dt])) {
+                  for (const [d, info] of Object.entries(packageMap)) {
+                    if (info.origName === dep && d !== dir) graph[dir].push(d);
+                  }
+                }
+              }
+            }
+          }
+
+          const visited = new Set(), order = [];
+          function visit(n) { if (visited.has(n)) return; visited.add(n); (graph[n]||[]).forEach(visit); order.push(n); }
+          Object.keys(packageMap).forEach(visit);
+
+          console.log("Discovered packages:");
+          for (const [dir, info] of Object.entries(packageMap)) {
+            console.log("  " + dir + ": " + info.origName + " -> " + info.newName);
+          }
+          console.log("\nPublish order: " + order.join(" "));
+
+          fs.writeFileSync("/tmp/package_map.json", JSON.stringify(packageMap));
+          fs.writeFileSync("/tmp/dep_map.json", JSON.stringify(depMap));
+          fs.writeFileSync("/tmp/publish_order.txt", order.join("\n"));
+          SCRIPT
+
+          # Script 2: Rewrite package.json for publishing
+          cat > /tmp/rewrite_pkg.js << 'SCRIPT'
+          const fs = require("fs");
+          const depMap = JSON.parse(fs.readFileSync("/tmp/dep_map.json", "utf8"));
+          const newName = process.argv[2];
+
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          pkg.name = newName;
+
+          for (const dt of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+            if (pkg[dt]) {
+              const nd = {};
+              for (const [n, v] of Object.entries(pkg[dt])) { nd[depMap[n] || n] = v; }
+              pkg[dt] = nd;
+            }
+          }
+          fs.writeFileSync("package.json", JSON.stringify(pkg, null, "\t"));
+          SCRIPT
+
+          # Script 3: Rewrite import paths in dist/src files (longest-match-first)
+          cat > /tmp/rewrite_imports.js << 'SCRIPT'
+          const fs = require("fs");
+          const path = require("path");
+          const depMap = JSON.parse(fs.readFileSync("/tmp/dep_map.json", "utf8"));
+
+          // Sort by length descending: "@mariozechner/pi-tui" before "@mariozechner/pi"
+          const sortedEntries = Object.entries(depMap).sort((a, b) => b[0].length - a[0].length);
+
+          function walk(dir) {
+            if (!fs.existsSync(dir)) return [];
+            const out = [];
+            for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+              const p = path.join(dir, e.name);
+              if (e.isDirectory()) out.push(...walk(p));
+              else if (/\.(js|mjs|cjs|ts|map)$/.test(e.name)) out.push(p);
+            }
+            return out;
+          }
+
+          let total = 0;
+          for (const d of ["dist", "src"]) {
+            for (const file of walk(d)) {
+              let content = fs.readFileSync(file, "utf8");
+              let changed = false;
+              for (const [orig, repl] of sortedEntries) {
+                if (content.includes(orig)) {
+                  content = content.replaceAll(orig, repl);
+                  changed = true;
+                  total++;
+                }
+              }
+              if (changed) fs.writeFileSync(file, content);
+            }
+          }
+          console.log("  Rewrote imports in " + total + " files");
+          SCRIPT
+
+          echo "✅ Helper scripts created"
+
       - name: Auto-discover packages and publish under @hyperspaceng scope
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -77,201 +201,35 @@ jobs:
           npm whoami && echo "✅ Authenticated" || { echo "❌ Auth failed"; exit 1; }
 
           echo ""
-          echo "=== Auto-discovering @mariozechner packages and generating @hyperspaceng mappings ==="
-          echo ""
-
-          # Auto-discover all packages and build mapping dynamically
-          node -e "
-          const fs = require('fs');
-          const path = require('path');
-
-          const packagesDir = 'packages';
-          const dirs = fs.readdirSync(packagesDir).filter(d =>
-            fs.statSync(path.join(packagesDir, d)).isDirectory() &&
-            fs.existsSync(path.join(packagesDir, d, 'package.json'))
-          );
-
-          const packageMap = {};
-          const depMap = {};
-
-          for (const dir of dirs) {
-            const pkgPath = path.join(packagesDir, dir, 'package.json');
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            const origName = pkg.name;
-
-            if (!origName) continue;
-
-            let newName;
-            if (origName.startsWith('@mariozechner/pi-')) {
-              const suffix = origName.replace('@mariozechner/pi-', '');
-              newName = '@hyperspaceng/neural-' + suffix;
-            } else if (origName === '@mariozechner/pi') {
-              newName = '@hyperspaceng/neural-pods';
-            } else if (origName.startsWith('@mariozechner/')) {
-              const suffix = origName.replace('@mariozechner/', '');
-              newName = '@hyperspaceng/neural-' + suffix;
-            } else {
-              continue;
-            }
-
-            packageMap[dir] = { origName, newName };
-            depMap[origName] = newName;
-          }
-
-          console.log('Discovered packages:');
-          console.log(JSON.stringify(packageMap, null, 2));
-          console.log('');
-          console.log('Dependency mapping:');
-          console.log(JSON.stringify(depMap, null, 2));
-
-          fs.writeFileSync('/tmp/package_map.json', JSON.stringify(packageMap));
-          fs.writeFileSync('/tmp/dep_map.json', JSON.stringify(depMap));
-          "
-
-          echo ""
-          echo "=== Determining publish order ==="
-          echo ""
-
-          node -e "
-          const fs = require('fs');
-          const path = require('path');
-
-          const packageMap = JSON.parse(fs.readFileSync('/tmp/package_map.json', 'utf8'));
-          const dirs = Object.keys(packageMap);
-
-          const graph = {};
-          for (const dir of dirs) {
-            const pkgPath = path.join('packages', dir, 'package.json');
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            graph[dir] = [];
-            for (const depType of ['dependencies', 'devDependencies', 'peerDependencies']) {
-              if (pkg[depType]) {
-                for (const depName of Object.keys(pkg[depType])) {
-                  for (const [d, info] of Object.entries(packageMap)) {
-                    if (info.origName === depName && d !== dir) {
-                      graph[dir].push(d);
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          const visited = new Set();
-          const order = [];
-          function visit(node) {
-            if (visited.has(node)) return;
-            visited.add(node);
-            for (const dep of (graph[node] || [])) { visit(dep); }
-            order.push(node);
-          }
-          dirs.forEach(visit);
-
-          console.log('Publish order: ' + order.join(' '));
-          fs.writeFileSync('/tmp/publish_order.txt', order.join('\n'));
-          "
-
+          node /tmp/discover.js
           echo ""
           echo "=== Publishing packages ==="
-          echo ""
 
           PUBLISH_ORDER=$(cat /tmp/publish_order.txt)
 
           for pkg_dir in $PUBLISH_ORDER; do
             PKG_DIR="packages/$pkg_dir"
-            if [ ! -f "$PKG_DIR/package.json" ]; then
-              continue
-            fi
+            [ ! -f "$PKG_DIR/package.json" ] && continue
 
-            NEW_NAME=$(node -e "const m = JSON.parse(require('fs').readFileSync('/tmp/package_map.json','utf8')); console.log(m['$pkg_dir']?.newName || '')")
-            ORIG_NAME=$(node -e "const m = JSON.parse(require('fs').readFileSync('/tmp/package_map.json','utf8')); console.log(m['$pkg_dir']?.origName || '')")
-
-            if [ -z "$NEW_NAME" ] || [ -z "$ORIG_NAME" ]; then
-              echo "⏭️  Skipping $pkg_dir (not a @mariozechner package)"
-              continue
-            fi
+            NEW_NAME=$(node -e "const m=JSON.parse(require('fs').readFileSync('/tmp/package_map.json','utf8'));console.log(m['$pkg_dir']?.newName||'')")
+            ORIG_NAME=$(node -e "const m=JSON.parse(require('fs').readFileSync('/tmp/package_map.json','utf8'));console.log(m['$pkg_dir']?.origName||'')")
+            [ -z "$NEW_NAME" ] || [ -z "$ORIG_NAME" ] && continue
 
             echo ""
             echo "📦 Publishing $NEW_NAME (from $ORIG_NAME)..."
-
             cd "$PKG_DIR"
 
-            # 1. Rename package and remap dependencies in package.json
-            node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            const depMap = JSON.parse(fs.readFileSync('/tmp/dep_map.json', 'utf8'));
+            # Rewrite package.json (name + deps)
+            node /tmp/rewrite_pkg.js "$NEW_NAME"
 
-            pkg.name = '$NEW_NAME';
-
-            for (const depType of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
-              if (pkg[depType]) {
-                const newDeps = {};
-                for (const [name, version] of Object.entries(pkg[depType])) {
-                  newDeps[depMap[name] || name] = version;
-                }
-                pkg[depType] = newDeps;
-              }
-            }
-
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, '\t'));
-            "
-
-            # 2. Rewrite @mariozechner/* import paths in compiled dist/ files (JS, JS.MAP, D.TS)
-            node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const depMap = JSON.parse(fs.readFileSync('/tmp/dep_map.json', 'utf8'));
-
-            function walkDir(dir) {
-              if (!fs.existsSync(dir)) return [];
-              const files = [];
-              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-                const fullPath = path.join(dir, entry.name);
-                if (entry.isDirectory()) {
-                  files.push(...walkDir(fullPath));
-                } else if (/\.(js|mjs|cjs|ts|d\.ts|map)$/.test(entry.name)) {
-                  files.push(fullPath);
-                }
-              }
-              return files;
-            }
-
-            // Also rewrite src/ files in case they are included in the published package
-            const dirs = ['dist', 'src'];
-            let totalRewrites = 0;
-
-            for (const d of dirs) {
-              const files = walkDir(d);
-              for (const file of files) {
-                let content = fs.readFileSync(file, 'utf8');
-                let modified = false;
-
-                for (const [origPkg, newPkg] of Object.entries(depMap)) {
-                  // Match import/require strings: '@mariozechner/pi-ai' or '@mariozechner/pi-ai/something'
-                  const escaped = origPkg.replace(/[.*+?^\${}()|[\]\\\\]/g, '\\\\\\$&');
-                  const regex = new RegExp(escaped.replace(/\\\\\\\\/g, '\\\\'), 'g');
-                  if (content.includes(origPkg)) {
-                    content = content.split(origPkg).join(newPkg);
-                    modified = true;
-                    totalRewrites++;
-                  }
-                }
-
-                if (modified) {
-                  fs.writeFileSync(file, content);
-                }
-              }
-            }
-            console.log('  Rewrote ' + totalRewrites + ' import references in dist/src files');
-            "
+            # Rewrite import paths in compiled files (longest-match-first)
+            node /tmp/rewrite_imports.js
 
             # Publish
-            npm publish --access public --ignore-scripts 2>&1 || echo "⚠️ Failed to publish $NEW_NAME (may already exist or build issue)"
+            npm publish --access public --ignore-scripts 2>&1 || echo "⚠️ Failed to publish $NEW_NAME"
 
-            # 3. Restore original package.json and dist/src files via git checkout
+            # Restore original files
             git checkout -- . 2>/dev/null || true
-
             cd - > /dev/null
           done
 
