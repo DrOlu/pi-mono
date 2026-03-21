@@ -81,10 +81,6 @@ jobs:
           echo ""
 
           # Auto-discover all packages and build mapping dynamically
-          # Convention: @mariozechner/pi-{suffix} -> @hyperspaceng/neural-{suffix}
-          # Special case: @mariozechner/pi (no suffix) -> @hyperspaceng/neural-pods
-          # Special case: @mariozechner/jiti -> @hyperspaceng/neural-jiti (non-pi packages)
-
           node -e "
           const fs = require('fs');
           const path = require('path');
@@ -95,8 +91,8 @@ jobs:
             fs.existsSync(path.join(packagesDir, d, 'package.json'))
           );
 
-          const packageMap = {};  // dir -> { origName, newName }
-          const depMap = {};      // origName -> newName
+          const packageMap = {};
+          const depMap = {};
 
           for (const dir of dirs) {
             const pkgPath = path.join(packagesDir, dir, 'package.json');
@@ -107,40 +103,19 @@ jobs:
 
             let newName;
             if (origName.startsWith('@mariozechner/pi-')) {
-              // @mariozechner/pi-tui -> @hyperspaceng/neural-tui
               const suffix = origName.replace('@mariozechner/pi-', '');
               newName = '@hyperspaceng/neural-' + suffix;
             } else if (origName === '@mariozechner/pi') {
-              // Special: the main 'pi' package maps to 'neural-pods' (dir name is 'pods')
               newName = '@hyperspaceng/neural-pods';
             } else if (origName.startsWith('@mariozechner/')) {
-              // Other @mariozechner packages (e.g. @mariozechner/jiti)
               const suffix = origName.replace('@mariozechner/', '');
               newName = '@hyperspaceng/neural-' + suffix;
             } else {
-              // Non-mariozechner packages - skip
               continue;
             }
 
-            packageMap[dir] = { origName, newName, hasDistDir: fs.existsSync(path.join(packagesDir, dir, 'dist')) };
+            packageMap[dir] = { origName, newName };
             depMap[origName] = newName;
-          }
-
-          // Also scan all package.json files for @mariozechner deps that might not be in packages/
-          // (e.g. @mariozechner/jiti which is external but needs remapping if published)
-          for (const dir of dirs) {
-            const pkgPath = path.join(packagesDir, dir, 'package.json');
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            for (const depType of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
-              if (pkg[depType]) {
-                for (const depName of Object.keys(pkg[depType])) {
-                  if (depName.startsWith('@mariozechner/') && !depMap[depName]) {
-                    // External @mariozechner dep - don't remap (it's a real external package like @mariozechner/jiti)
-                    // Only remap if it matches a package we're publishing
-                  }
-                }
-              }
-            }
           }
 
           console.log('Discovered packages:');
@@ -149,31 +124,21 @@ jobs:
           console.log('Dependency mapping:');
           console.log(JSON.stringify(depMap, null, 2));
 
-          // Write mappings to files for shell consumption
           fs.writeFileSync('/tmp/package_map.json', JSON.stringify(packageMap));
           fs.writeFileSync('/tmp/dep_map.json', JSON.stringify(depMap));
           "
 
           echo ""
-          echo "=== Publishing packages ==="
+          echo "=== Determining publish order ==="
           echo ""
 
-          # Publish order: dependencies first (tui, ai, agent, then coding-agent, then the rest)
-          # Dynamically determine order based on internal deps
           node -e "
           const fs = require('fs');
           const path = require('path');
 
           const packageMap = JSON.parse(fs.readFileSync('/tmp/package_map.json', 'utf8'));
-          const depMap = JSON.parse(fs.readFileSync('/tmp/dep_map.json', 'utf8'));
-          const reverseDepMap = {};
-          for (const [k, v] of Object.entries(depMap)) {
-            reverseDepMap[v] = k;
-          }
-
           const dirs = Object.keys(packageMap);
 
-          // Build dependency graph
           const graph = {};
           for (const dir of dirs) {
             const pkgPath = path.join('packages', dir, 'package.json');
@@ -182,7 +147,6 @@ jobs:
             for (const depType of ['dependencies', 'devDependencies', 'peerDependencies']) {
               if (pkg[depType]) {
                 for (const depName of Object.keys(pkg[depType])) {
-                  // Find which dir this dep belongs to
                   for (const [d, info] of Object.entries(packageMap)) {
                     if (info.origName === depName && d !== dir) {
                       graph[dir].push(d);
@@ -193,15 +157,12 @@ jobs:
             }
           }
 
-          // Topological sort
           const visited = new Set();
           const order = [];
           function visit(node) {
             if (visited.has(node)) return;
             visited.add(node);
-            for (const dep of (graph[node] || [])) {
-              visit(dep);
-            }
+            for (const dep of (graph[node] || [])) { visit(dep); }
             order.push(node);
           }
           dirs.forEach(visit);
@@ -209,6 +170,10 @@ jobs:
           console.log('Publish order: ' + order.join(' '));
           fs.writeFileSync('/tmp/publish_order.txt', order.join('\n'));
           "
+
+          echo ""
+          echo "=== Publishing packages ==="
+          echo ""
 
           PUBLISH_ORDER=$(cat /tmp/publish_order.txt)
 
@@ -218,7 +183,6 @@ jobs:
               continue
             fi
 
-            # Get the new name and original name from the map
             NEW_NAME=$(node -e "const m = JSON.parse(require('fs').readFileSync('/tmp/package_map.json','utf8')); console.log(m['$pkg_dir']?.newName || '')")
             ORIG_NAME=$(node -e "const m = JSON.parse(require('fs').readFileSync('/tmp/package_map.json','utf8')); console.log(m['$pkg_dir']?.origName || '')")
 
@@ -232,7 +196,7 @@ jobs:
 
             cd "$PKG_DIR"
 
-            # Rename package and remap all @mariozechner dependencies to @hyperspaceng
+            # 1. Rename package and remap dependencies in package.json
             node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -244,48 +208,69 @@ jobs:
               if (pkg[depType]) {
                 const newDeps = {};
                 for (const [name, version] of Object.entries(pkg[depType])) {
-                  if (depMap[name]) {
-                    newDeps[depMap[name]] = version;
-                  } else {
-                    newDeps[name] = version;
-                  }
+                  newDeps[depMap[name] || name] = version;
                 }
                 pkg[depType] = newDeps;
               }
             }
 
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, '\t'));
+            "
+
+            # 2. Rewrite @mariozechner/* import paths in compiled dist/ files (JS, JS.MAP, D.TS)
+            node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const depMap = JSON.parse(fs.readFileSync('/tmp/dep_map.json', 'utf8'));
+
+            function walkDir(dir) {
+              if (!fs.existsSync(dir)) return [];
+              const files = [];
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const fullPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                  files.push(...walkDir(fullPath));
+                } else if (/\.(js|mjs|cjs|ts|d\.ts|map)$/.test(entry.name)) {
+                  files.push(fullPath);
+                }
+              }
+              return files;
+            }
+
+            // Also rewrite src/ files in case they are included in the published package
+            const dirs = ['dist', 'src'];
+            let totalRewrites = 0;
+
+            for (const d of dirs) {
+              const files = walkDir(d);
+              for (const file of files) {
+                let content = fs.readFileSync(file, 'utf8');
+                let modified = false;
+
+                for (const [origPkg, newPkg] of Object.entries(depMap)) {
+                  // Match import/require strings: '@mariozechner/pi-ai' or '@mariozechner/pi-ai/something'
+                  const escaped = origPkg.replace(/[.*+?^\${}()|[\]\\\\]/g, '\\\\\\$&');
+                  const regex = new RegExp(escaped.replace(/\\\\\\\\/g, '\\\\'), 'g');
+                  if (content.includes(origPkg)) {
+                    content = content.split(origPkg).join(newPkg);
+                    modified = true;
+                    totalRewrites++;
+                  }
+                }
+
+                if (modified) {
+                  fs.writeFileSync(file, content);
+                }
+              }
+            }
+            console.log('  Rewrote ' + totalRewrites + ' import references in dist/src files');
             "
 
             # Publish
             npm publish --access public --ignore-scripts 2>&1 || echo "⚠️ Failed to publish $NEW_NAME (may already exist or build issue)"
 
-            # Restore original package.json
-            node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            const depMap = JSON.parse(fs.readFileSync('/tmp/dep_map.json', 'utf8'));
-            const reverseMap = {};
-            for (const [k, v] of Object.entries(depMap)) { reverseMap[v] = k; }
-
-            pkg.name = '$ORIG_NAME';
-
-            for (const depType of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
-              if (pkg[depType]) {
-                const newDeps = {};
-                for (const [name, version] of Object.entries(pkg[depType])) {
-                  if (reverseMap[name]) {
-                    newDeps[reverseMap[name]] = version;
-                  } else {
-                    newDeps[name] = version;
-                  }
-                }
-                pkg[depType] = newDeps;
-              }
-            }
-
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, '\t'));
-            "
+            # 3. Restore original package.json and dist/src files via git checkout
+            git checkout -- . 2>/dev/null || true
 
             cd - > /dev/null
           done
