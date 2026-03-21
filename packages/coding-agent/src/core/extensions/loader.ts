@@ -10,18 +10,18 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "@mariozechner/jiti";
-import * as _bundledPiAgentCore from "@mariozechner/pi-agent-core";
-import * as _bundledPiAi from "@mariozechner/pi-ai";
-import * as _bundledPiAiOauth from "@mariozechner/pi-ai/oauth";
-import type { KeyId } from "@mariozechner/pi-tui";
-import * as _bundledPiTui from "@mariozechner/pi-tui";
+import * as _bundledPiAgentCore from "@hyperspaceng/neural-agent-core";
+import * as _bundledPiAi from "@hyperspaceng/neural-ai";
+import * as _bundledPiAiOauth from "@hyperspaceng/neural-ai/oauth";
+import type { KeyId } from "@hyperspaceng/neural-tui";
+import * as _bundledPiTui from "@hyperspaceng/neural-tui";
 // Static imports of packages that extensions may use.
 // These MUST be static so Bun bundles them into the compiled binary.
 // The virtualModules option then makes them available to extensions.
 import * as _bundledTypebox from "@sinclair/typebox";
 import { getAgentDir, isBunBinary } from "../../config.js";
 // NOTE: This import works because loader.ts exports are NOT re-exported from index.ts,
-// avoiding a circular dependency. Extensions can import from @mariozechner/pi-coding-agent.
+// avoiding a circular dependency. Extensions can import from @hyperspaceng/neural-coding-agent.
 import * as _bundledPiCodingAgent from "../../index.js";
 import { createEventBus, type EventBus } from "../event-bus.js";
 import type { ExecOptions } from "../exec.js";
@@ -41,11 +41,11 @@ import type {
 /** Modules available to extensions via virtualModules (for compiled Bun binary) */
 const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@sinclair/typebox": _bundledTypebox,
-	"@mariozechner/pi-agent-core": _bundledPiAgentCore,
-	"@mariozechner/pi-tui": _bundledPiTui,
-	"@mariozechner/pi-ai": _bundledPiAi,
-	"@mariozechner/pi-ai/oauth": _bundledPiAiOauth,
-	"@mariozechner/pi-coding-agent": _bundledPiCodingAgent,
+	"@hyperspaceng/neural-agent-core": _bundledPiAgentCore,
+	"@hyperspaceng/neural-tui": _bundledPiTui,
+	"@hyperspaceng/neural-ai": _bundledPiAi,
+	"@hyperspaceng/neural-ai/oauth": _bundledPiAiOauth,
+	"@hyperspaceng/neural-coding-agent": _bundledPiCodingAgent,
 };
 
 const require = createRequire(import.meta.url);
@@ -74,11 +74,11 @@ function getAliases(): Record<string, string> {
 	};
 
 	_aliases = {
-		"@mariozechner/pi-coding-agent": packageIndex,
-		"@mariozechner/pi-agent-core": resolveWorkspaceOrImport("agent/dist/index.js", "@mariozechner/pi-agent-core"),
-		"@mariozechner/pi-tui": resolveWorkspaceOrImport("tui/dist/index.js", "@mariozechner/pi-tui"),
-		"@mariozechner/pi-ai": resolveWorkspaceOrImport("ai/dist/index.js", "@mariozechner/pi-ai"),
-		"@mariozechner/pi-ai/oauth": resolveWorkspaceOrImport("ai/dist/oauth.js", "@mariozechner/pi-ai/oauth"),
+		"@hyperspaceng/neural-coding-agent": packageIndex,
+		"@hyperspaceng/neural-agent-core": resolveWorkspaceOrImport("agent/dist/index.js", "@hyperspaceng/neural-agent-core"),
+		"@hyperspaceng/neural-tui": resolveWorkspaceOrImport("tui/dist/index.js", "@hyperspaceng/neural-tui"),
+		"@hyperspaceng/neural-ai": resolveWorkspaceOrImport("ai/dist/index.js", "@hyperspaceng/neural-ai"),
+		"@hyperspaceng/neural-ai/oauth": resolveWorkspaceOrImport("ai/dist/oauth.js", "@hyperspaceng/neural-ai/oauth"),
 		"@sinclair/typebox": typeboxRoot,
 	};
 

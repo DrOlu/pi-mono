@@ -9,7 +9,7 @@ import type {
 	TextContent,
 	Tool,
 	ToolResultMessage,
-} from "@mariozechner/pi-ai";
+} from "@hyperspaceng/neural-ai";
 import type { Static, TSchema } from "@sinclair/typebox";
 
 /**

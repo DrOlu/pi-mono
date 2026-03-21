@@ -1,5 +1,5 @@
-import type { Api, Context, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
-import { streamSimple } from "@mariozechner/pi-ai";
+import type { Api, Context, Model, SimpleStreamOptions } from "@hyperspaceng/neural-ai";
+import { streamSimple } from "@hyperspaceng/neural-ai";
 
 /**
  * Centralized proxy decision logic.
