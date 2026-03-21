@@ -187,7 +187,7 @@ jobs:
               done
               echo "  Done rewriting dist files"
             fi
-            if [ -d "src" ]; then
+            if false; then  # DO NOT rewrite src - only dist gets rewritten at publish time
               find src -type f \( -name "*.js" -o -name "*.ts" -o -name "*.map" -o -name "*.mjs" -o -name "*.cjs" \) | while read f; do
                 sed -f /tmp/sed_commands.txt -i "$f"
               done
