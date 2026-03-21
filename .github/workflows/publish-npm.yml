@@ -166,7 +166,7 @@ jobs:
             fs.writeFileSync("package.json", JSON.stringify(pkg, null, "\t"));
           REWRITE_PKG
 
-            # Rewrite imports in dist/src using sed (most reliable, no JS edge cases)
+            # Rewrite imports in dist/ using sed (most reliable, no JS edge cases)
             # Process longest package names first to avoid partial matches
             echo "  Rewriting imports with sed..."
 
@@ -186,12 +186,6 @@ jobs:
                 sed -f /tmp/sed_commands.txt -i "$f"
               done
               echo "  Done rewriting dist files"
-            fi
-            if false; then  # DO NOT rewrite src - only dist gets rewritten at publish time
-              find src -type f \( -name "*.js" -o -name "*.ts" -o -name "*.map" -o -name "*.mjs" -o -name "*.cjs" \) | while read f; do
-                sed -f /tmp/sed_commands.txt -i "$f"
-              done
-              echo "  Done rewriting src files"
             fi
 
             # Debug: verify the rewrite worked for coding-agent
