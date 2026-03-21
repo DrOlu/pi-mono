@@ -5,7 +5,7 @@ import {
 	type KeyId,
 	TUI_KEYBINDINGS,
 	KeybindingsManager as TuiKeybindingsManager,
-} from "@hyperspaceng/neural-tui";
+} from "@mariozechner/pi-tui";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { getAgentDir } from "../config.js";
@@ -41,7 +41,7 @@ export interface AppKeybindings {
 
 export type AppKeybinding = keyof AppKeybindings;
 
-declare module "@hyperspaceng/neural-tui" {
+declare module "@mariozechner/pi-tui" {
 	interface Keybindings extends AppKeybindings {}
 }
 

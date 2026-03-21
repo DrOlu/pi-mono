@@ -22,9 +22,9 @@ import type {
 	AgentState,
 	AgentTool,
 	ThinkingLevel,
-} from "@hyperspaceng/neural-agent-core";
-import type { AssistantMessage, ImageContent, Message, Model, TextContent } from "@hyperspaceng/neural-ai";
-import { isContextOverflow, modelsAreEqual, resetApiProviders, supportsXhigh } from "@hyperspaceng/neural-ai";
+} from "@mariozechner/pi-agent-core";
+import type { AssistantMessage, ImageContent, Message, Model, TextContent } from "@mariozechner/pi-ai";
+import { isContextOverflow, modelsAreEqual, resetApiProviders, supportsXhigh } from "@mariozechner/pi-ai";
 import { getDocsPath } from "../config.js";
 import { theme } from "../modes/interactive/theme/theme.js";
 import { stripFrontmatter } from "../utils/frontmatter.js";

@@ -11,8 +11,8 @@ import {
 	type OAuthCredentials,
 	type OAuthLoginCallbacks,
 	type OAuthProviderId,
-} from "@hyperspaceng/neural-ai";
-import { getOAuthApiKey, getOAuthProvider, getOAuthProviders } from "@hyperspaceng/neural-ai/oauth";
+} from "@mariozechner/pi-ai";
+import { getOAuthApiKey, getOAuthProvider, getOAuthProviders } from "@mariozechner/pi-ai/oauth";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";

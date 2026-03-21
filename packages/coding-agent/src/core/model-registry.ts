@@ -16,8 +16,8 @@ import {
 	registerApiProvider,
 	resetApiProviders,
 	type SimpleStreamOptions,
-} from "@hyperspaceng/neural-ai";
-import { registerOAuthProvider, resetOAuthProviders } from "@hyperspaceng/neural-ai/oauth";
+} from "@mariozechner/pi-ai";
+import { registerOAuthProvider, resetOAuthProviders } from "@mariozechner/pi-ai/oauth";
 import { type Static, Type } from "@sinclair/typebox";
 import AjvModule from "ajv";
 import { existsSync, readFileSync } from "fs";

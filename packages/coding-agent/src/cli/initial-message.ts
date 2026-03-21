@@ -1,4 +1,4 @@
-import type { ImageContent } from "@hyperspaceng/neural-ai";
+import type { ImageContent } from "@mariozechner/pi-ai";
 import type { Args } from "./args.js";
 
 export interface InitialMessageInput {
