@@ -53,7 +53,10 @@ jobs:
           cat packages/*/package.json | grep '"version"' | head -20
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: |
+          # Remove stale lock file after version bump to avoid npm workspace resolution errors
+          node -e "const fs=require('fs'); ['package-lock.json'].forEach(f=>{ try{fs.unlinkSync(f);console.log('Removed '+f);}catch(e){} });"
+          npm install --legacy-peer-deps
 
       - name: Build packages
         run: |
