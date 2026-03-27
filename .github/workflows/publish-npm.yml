@@ -54,8 +54,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Remove stale lock file after version bump to avoid npm workspace resolution errors
-          node -e "const fs=require('fs'); ['package-lock.json'].forEach(f=>{ try{fs.unlinkSync(f);console.log('Removed '+f);}catch(e){} });"
+          # Regenerate lockfile after version bump (preserves tarball URLs like xlsx CDN)
+          # Using --package-lock-only first regenerates the lockfile without installing
+          npm install --package-lock-only --legacy-peer-deps --ignore-scripts 2>/dev/null || true
           npm install --legacy-peer-deps
 
       - name: Build packages
