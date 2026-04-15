@@ -1,31 +1,25 @@
-<!-- OSS_WEEKEND_START -->
-# 🏖️ OSS Weekend
-
-**Issue tracker reopens Monday, April 20, 2026.**
-
-OSS weekend runs Monday, April 13, 2026 through Monday, April 20, 2026. New issues and PRs from unapproved contributors are auto-closed during this time. Approved contributors can still open issues and PRs if something is genuinely urgent, but please keep that to pressing matters only. For support, join [Discord](https://discord.com/invite/3cU7Bz4UPx).
-<!-- OSS_WEEKEND_END -->
-
----
-
 <p align="center">
-  <a href="https://neural.dev">
-    <img src="https://neural.dev/logo.svg" alt="neural logo" width="128">
+  <a href="https://shittycodingagent.ai">
+    <img src="https://shittycodingagent.ai/logo.svg" alt="pi logo" width="128">
   </a>
 </p>
 <p align="center">
   <a href="https://discord.com/invite/3cU7Bz4UPx"><img alt="Discord" src="https://img.shields.io/badge/discord-community-5865F2?style=flat-square&logo=discord&logoColor=white" /></a>
-  <a href="https://github.com/DrOlu/pi-mono/actions/workflows/ci.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/DrOlu/pi-mono/ci.yml?style=flat-square&branch=main" /></a>
+  <a href="https://github.com/badlogic/pi-mono/actions/workflows/ci.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/badlogic/pi-mono/ci.yml?style=flat-square&branch=main" /></a>
 </p>
 <p align="center">
-  <a href="https://neural.dev">neural.dev</a> domain graciously donated by
+  <a href="https://pi.dev">pi.dev</a> domain graciously donated by
   <br /><br />
-  <a href="https://hyperspace.ng"><img src="packages/coding-agent/docs/images/exy.png" alt="Hyperspace mascot" width="48" /><br />Hyperspace Technologies</a>
+  <a href="https://exe.dev"><img src="packages/coding-agent/docs/images/exy.png" alt="Exy mascot" width="48" /><br />exe.dev</a>
 </p>
 
-# Neural Monorepo
+> New issues and PRs from new contributors are auto-closed by default. Maintainers review auto-closed issues daily. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-> **Looking for the neural coding agent?** See **[packages/coding-agent](packages/coding-agent)** for installation and usage.
+---
+
+# Pi Monorepo
+
+> **Looking for the pi coding agent?** See **[packages/coding-agent](packages/coding-agent)** for installation and usage.
 
 Tools for building AI agents and managing LLM deployments.
 
